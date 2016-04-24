@@ -5,7 +5,7 @@ require_once ("FxListenSocket.php");
 require_once ("FxConnectSocket.php");
 
 $oServerListenSocket = new FxListenSocket();
-if($oServerListenSocket->Initialize("127.0.0.1", 12000, new ServerConnectionFactory()) === false)
+if($oServerListenSocket->Initialize("127.0.0.1", 10000, new ServerConnectionFactory()) === false)
 {
 	exit(0);
 }

@@ -14,24 +14,31 @@ class FxListenSocket extends FxMySocket
 	public function Initialize($strIp, $dwPort, $pConnectionFactroy)
 	{
 		$this->SetSocket(socket_create(AF_INET, SOCK_STREAM, 0));
+		
+		if (socket_set_option($this->GetSocket(), SOL_SOCKET, SO_REUSEADDR, 1) === FALSE) 
+		{
+			MyLog::crt("socket_set_option() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
+			return false;
+		}
+		
 		if(false === socket_bind($this->GetSocket(), $strIp, $dwPort))
 		{
-			MyLog::crt("socket_select() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
+			MyLog::crt("socket_bind() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
 			return false;
 		}
 		if(false === socket_listen($this->GetSocket(), 16))
 		{
-			MyLog::crt("socket_select() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
+			MyLog::crt("socket_listen() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
 			return false;
 		}
 		if(false === socket_set_option($this->GetSocket(), SOL_SOCKET, SO_REUSEADDR, 1))
 		{
-			MyLog::crt("socket_select() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
+			MyLog::crt("socket_set_option() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
 			return false;
 		}
 		if(false === socket_set_nonblock($this->GetSocket()))
 		{
-			MyLog::crt("socket_select() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
+			MyLog::crt("socket_set_nonblock() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
 			return false;
 		}
 		$this->m_ConnectionFactroy = $pConnectionFactroy;
@@ -45,9 +52,14 @@ class FxListenSocket extends FxMySocket
 	{
 		if(($dwConnectSocket = socket_accept($this->GetSocket())) !== false)
 		{
+			if (socket_set_option($this->GetSocket(), SOL_SOCKET, SO_REUSEADDR, 1) === FALSE)
+			{
+				MyLog::crt("socket_set_option() failed, reason : " . socket_strerror(socket_last_error($this->GetSocket())) . ", error no : " . socket_last_error($this->GetSocket()));
+				return false;
+			}
 			if(socket_set_nonblock($dwConnectSocket) === false)
 			{
-				MyLog::crt("socket_select() failed, reason : " . socket_strerror(socket_last_error($dwConnectSocket)) . ", error no : " . socket_last_error($dwConnectSocket));
+				MyLog::crt("socket_set_nonblock() failed, reason : " . socket_strerror(socket_last_error($dwConnectSocket)) . ", error no : " . socket_last_error($dwConnectSocket));
 				socket_close($dwConnectSocket);
 				return;
 			}

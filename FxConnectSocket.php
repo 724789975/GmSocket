@@ -26,7 +26,7 @@ class FxConnectSocket extends FxMySocket
 			MyLog::crt("socket_recv() failed; errorno :  " . socket_last_error($this->GetSocket()) . " reason : " . socket_strerror(socket_last_error($this->GetSocket())));
 			socket_close($this->GetSocket());
 			
-			FxNet::Instance().DelSocket($this->GetSocket());
+			FxNet::Instance()->DelSocket($this->GetSocket());
 			return false;
 		}
 		
@@ -56,6 +56,32 @@ class FxConnectSocket extends FxMySocket
 	
 	public function Send($strSend, $dwLength)
 	{
+		if($dwLength <= 0)
+		{
+			return;
+		}
+		while(true)
+		{
+			if(($dwSendResult = socket_write($this->GetSocket(), $strSend, $dwLength)) === FALSE)
+			{
+				MyLog::crt("socket_recv() failed; errorno :  " . socket_last_error($this->GetSocket()) . " reason : " . socket_strerror(socket_last_error($this->GetSocket())));
+				socket_close($this->GetSocket());
+				
+				FxNet::Instance().DelSocket($this->GetSocket());
+				return;
+			}
+			$dwLength -= $dwSendResult;
+			if ($dwLength <= 0)
+			{
+				return;
+			}
+		}
+	}
+	
+	public  function SendMsg()
+	{
+		$this->Send($this->GetSendBuffer()->readAllBytes(), strlen($this->GetSendBuffer()->readAllBytes()));
+		$this->GetSendBuffer()->clear();
 	}
 	
 	public function GetRecvBuffer()
@@ -65,6 +91,15 @@ class FxConnectSocket extends FxMySocket
 			$this->m_dataRecvBuffer = new BigEndianBytesBuffer("");
 		}
 		return $this->m_dataRecvBuffer;
+	}
+	
+	public function GetSendBuffer()
+	{
+		if ($this->m_dataSendBuffer == NULL)
+		{
+			$this->m_dataSendBuffer = new BigEndianBytesBuffer("");
+		}
+		return $this->m_dataSendBuffer;
 	}
 	
 	protected $m_dataRecvBuffer;
@@ -91,6 +126,10 @@ class FxServerConnectSocket extends FxConnectSocket
 	
 				$strData = $this->GetRecvBuffer()->readBytes($dwLength);
 				MyLog::dbg($strData);
+				
+				$this->GetSendBuffer()->writeInt($dwLength);
+				$this->GetSendBuffer()->writeBytes($strData);
+				$this->SendMsg();
 			}
 		}
 	}	
