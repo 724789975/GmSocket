@@ -25,7 +25,10 @@ class BigEndianBytesBuffer extends BigEndianBuffer {
 		//$str = substr ( $this->bytes, $this->readerIndex, $len );
 		//$this->readerIndex += $len;
 		$str = substr ($this->bytes, 0, $len );
-		$this->bytes = substr($this->bytes, $len, strlen($this->bytes));
+		if ($str !== FALSE)
+		{
+			$this->bytes = substr($this->bytes, $len, strlen($this->bytes) - $len);
+		}
 		return $str;
 	}
 	
