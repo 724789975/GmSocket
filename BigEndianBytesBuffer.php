@@ -18,8 +18,10 @@ class BigEndianBytesBuffer extends BigEndianBuffer {
 		$this->bytes = $bytes;
 		$this->writeIndex += strlen ( $bytes );
 	}
-	public function readBytes($len) {
-		if ($len < 1) {
+	public function readBytes($len)
+	 {
+		if ($len < 1) 
+		{
 			return false;
 		}
 		//$str = substr ( $this->bytes, $this->readerIndex, $len );

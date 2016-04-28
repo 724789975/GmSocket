@@ -4,6 +4,61 @@ require_once("FxNet.php");
 require_once("log.php");
 require_once("BigEndianBytesBuffer.php");
 
+class FxHeader
+{
+	function __construct()
+	{
+	}
+	public  function  GetHeaderLength(){return 0;}
+	public  function  GetPkgHeader(){return NULL;}
+	public  function  BuildSendPkgHeader($dwDataLen){}
+	public  function  BuildRecvPkgHeader($strData){}
+	
+	public function ParsePacket()
+	{
+	}
+}
+
+class ServerHeader extends FxHeader
+{
+	function __construct()
+	{
+		$this->m_oHeaderBuffer = new BigEndianBytesBuffer("");
+	}
+	
+	public  function  GetHeaderLength()
+	{
+		return 4;
+	}
+	public  function  GetPkgHeader()
+	{
+		return $this->m_oHeaderBuffer->readAllBytes();
+	}
+	public function ParsePacket()
+	{
+		return $this->m_oHeaderBuffer->readInt();
+	}
+	public  function  BuildSendPkgHeader($dwDataLen)
+	{
+		$this->m_oHeaderBuffer->clear();
+		$this->m_oHeaderBuffer->writeInt($dwDataLen);
+	}
+	public  function  BuildRecvPkgHeader($strData)
+	{
+		if (strlen($strData) < $this->GetHeaderLength())
+		{
+			return FALSE;
+		}
+		
+		$this->m_oHeaderBuffer->clear();
+		
+		$str = substr($strData, 0, $this->GetHeaderLength());
+		$this->m_oHeaderBuffer->writeBytes($str);
+	}
+	
+	protected $m_oHeaderBuffer;
+}
+
 class FxConnectSocket extends FxMySocket
 {
 	function __construct()
@@ -108,33 +163,38 @@ class FxConnectSocket extends FxMySocket
 
 class FxServerConnectSocket extends FxConnectSocket
 {
-	function FxServerConnectSocket()
+	function __construct()
 	{
 		$this->m_dwServerId = 0;
+		$this->m_oServerHeader = new ServerHeader();
 	}
 	public function OnReadEnd()
 	{
 		MyLog::dbg("recv buffer length : " . $this->GetRecvBuffer()->GetBytesLength());
-		if ($this->GetRecvBuffer()->GetBytesLength() >= 4)
+		
+		while($this->m_oServerHeader->BuildRecvPkgHeader($this->GetRecvBuffer()->readAllBytes()) !== FALSE)
 		{
-			$oHeader = new BigEndianBytesBuffer(($this->GetRecvBuffer()->GetBytes(4)));
-			$dwLength = $oHeader->readInt();
-			MyLog::dbg("data length : " . $this->GetRecvBuffer()->GetBytesLength());
-			if ($dwLength + 4 >= $this->GetRecvBuffer()->GetBytesLength())
+			$dwParsePacketLen = $this->m_oServerHeader->ParsePacket();
+			if($this->GetRecvBuffer()->GetBytesLength() < ($dwParsePacketLen + $this->m_oServerHeader->GetHeaderLength()))
 			{
-				$this->GetRecvBuffer()->readBytes(4);
-	
-				$strData = $this->GetRecvBuffer()->readBytes($dwLength);
-				MyLog::dbg($strData);
-				
-				$this->GetSendBuffer()->writeInt($dwLength);
-				$this->GetSendBuffer()->writeBytes($strData);
-				$this->SendMsg();
+				return;
 			}
+			
+			$this->GetRecvBuffer()->readBytes($this->m_oServerHeader->GetHeaderLength());
+			
+			$strData = $this->GetRecvBuffer()->readBytes($dwParsePacketLen);
+			
+			$oHeader = new ServerHeader();
+			$oHeader->BuildSendPkgHeader(strlen($strData));
+			$this->GetSendBuffer()->writeBytes($oHeader->GetPkgHeader());
+			$this->GetSendBuffer()->writeBytes($strData);
+			$this->SendMsg();
 		}
 	}	
 	
 	private $m_dwServerId;
+	
+	private $m_oServerHeader;
 }
 
 class FxGMConnectSocket extends FxConnectSocket
