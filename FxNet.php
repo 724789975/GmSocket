@@ -21,22 +21,25 @@ class FxNet
 	
 	public function AddSocket($oReadSocket)
 	{
-		$this->m_arrSockets[] = $oReadSocket;
+		$this->m_arrSockets[print_r($oReadSocket->GetSocket(), true)] = $oReadSocket;
+// 		$this->m_arrSockets[] = $oReadSocket;
 	}
 	
 	public function DelSocket($dwDelSocket)
 	{
-		foreach ($this->m_arrSockets as $key=>$value)
+		MyLog::dbg(print_r($dwDelSocket, true) . " will remove");
+// 		MyLog::dbg(print_r(debug_backtrace(), true));
+		if(array_key_exists(print_r($dwDelSocket, true), $this->m_arrSockets))
 		{
-			if ($value->GetSocket() === $dwDelSocket)
-			{
-				unset($this->m_arrSockets[$key]);
-			}
+			MyLog::dbg("socket  " . print_r($dwDelSocket, true) . " remove from select");
+			$this->m_arrSockets[print_r($dwDelSocket, true)]->SetSocket(null);
+			unset($this->m_arrSockets[print_r($dwDelSocket, true)]);
+			socket_close($dwDelSocket);
 		}
-		//if(array_key_exists($dwReadSocket, $this->m_arrSockets))
-		//{
-			//unset($this->m_arrSockets[$dwReadSocket]);
-		//}
+		if(array_key_exists(print_r($dwDelSocket, true), $this->m_arrSockets))
+		{
+			MyLog::dbg("remove failed");
+		}
 	}
 	
 	public function Run()
@@ -45,34 +48,47 @@ class FxNet
 		{
 			$arrErrorSockets = array();
 			$arrReadSocket = array();
-			foreach ($this->m_arrSockets as $value)
+			foreach ($this->m_arrSockets as $key => $value)
 			{
-				$arrReadSocket[] = $value->GetSocket();
+				if ($value->GetSocket() == null)
+				{
+					MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . " GetSocket() == null");
+					unset($this->m_arrSockets[$key]);
+				}
+				else
+				{
+					$arrReadSocket[] = $value->GetSocket();
+				}
 			}
 			if(false === socket_select($arrReadSocket, $write = NULL, $arrErrorSockets, 0))
 			{
-				MyLog::crt("socket_select() failed, reason : " . socket_strerror(socket_last_error()) . ", error no : " . socket_last_error());
+				MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . "socket_select() failed, reason : " . socket_strerror(socket_last_error()) . ", error no : " . socket_last_error());
 				break;
 			}; 
-			
-			foreach ($arrReadSocket as $hReadSocket)
-			{
-				foreach ($this->m_arrSockets as $value)
-				{
-					//MyLog::dbg(print_r($hReadSocket, true) . " " . print_r($value->GetSocket(), true));
-					if ($value->GetSocket() === $hReadSocket)
-					{
-						$value->OnRead();
-						break;
-					}
-				}
-			}
 			
 			foreach ($arrErrorSockets as $hErrorSocket)
 			{
 				// 直接断开
-				socket_close($hErrorSocket);
+				MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . " errorno :  " . socket_last_error($hErrorSocket) . " reason : " . socket_strerror(socket_last_error($hErrorSocket)));
 				$this->DelSocket($hErrorSocket);
+// 				socket_close($hErrorSocket);
+			}
+			
+			foreach ($arrReadSocket as $hReadSocket)
+			{
+				//foreach ($this->m_arrSockets as $value)
+				if(array_key_exists(print_r($hReadSocket, true), $this->m_arrSockets))
+				{
+					try
+					{
+						$this->m_arrSockets[print_r($hReadSocket, true)]->OnRead();
+					}
+					catch (Exception $e)
+					{
+						MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . " errorno :  " . socket_last_error($this->m_arrSockets[print_r($hReadSocket, true)]->GetSocket()) . " reason : " . socket_strerror(socket_last_error($this->m_arrSockets[print_r($hReadSocket, true)]->GetSocket())));
+						$this->DelSocket($this->m_arrSockets[print_r($hReadSocket, true)]->GetSocket());
+					}
+				}
 			}
 			
 			// sleep 0.1s

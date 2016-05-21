@@ -20,13 +20,19 @@ class FxMySocket
 	
 	public function OnRead()
 	{
-		MyLog::crt("error read");
+		MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . "error read");
 		assert_options(ASSERT_WARNING, 0);
 	}
 	public function OnWrite()
 	{
-		MyLog::crt("error write");
+		MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . "error write");
 		assert_options(ASSERT_WARNING, 0);
+	}
+	
+	public function CloseSocket()
+	{
+		FxNet::Instance()->DelSocket($this->GetSocket());
+// 		socket_close($this->GetSocket());
 	}
 	
 	private $m_hSocket;

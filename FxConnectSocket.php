@@ -28,7 +28,7 @@ class ServerHeader extends FxHeader
 	
 	public  function  GetHeaderLength()
 	{
-		return 4;
+		return 8;
 	}
 	public  function  GetPkgHeader()
 	{
@@ -36,12 +36,20 @@ class ServerHeader extends FxHeader
 	}
 	public function ParsePacket()
 	{
-		return $this->m_oHeaderBuffer->readInt();
+		$dwLen = $this->m_oHeaderBuffer->readInt();
+		$strMagicNum = $this->m_oHeaderBuffer->readBytes(4);
+		if ($strMagicNum != self::c_MagicNum)
+		{
+			MyLog::crt("Magic Num Error !!!!!!!!!!!!!");
+			return FALSE;
+		}
+		return $dwLen;
 	}
 	public  function  BuildSendPkgHeader($dwDataLen)
 	{
 		$this->m_oHeaderBuffer->clear();
 		$this->m_oHeaderBuffer->writeInt($dwDataLen);
+		$this->m_oHeaderBuffer->writeBytes(self::c_MagicNum);
 	}
 	public  function  BuildRecvPkgHeader($strData)
 	{
@@ -57,6 +65,8 @@ class ServerHeader extends FxHeader
 	}
 	
 	protected $m_oHeaderBuffer;
+	
+	const c_MagicNum =  "TEST";
 }
 
 class FxConnectSocket extends FxMySocket
@@ -76,22 +86,20 @@ class FxConnectSocket extends FxMySocket
 		// 接到的数据 如果满足包长久立马处理掉 不然 放到$m_strRecvBuffer中 下次继续放
 		$strRecvBuffer = "";
 		$dwRecvLength = socket_recv($this->GetSocket(), $strRecvBuffer, 2048, MSG_DONTWAIT);
-		if ($dwRecvLength === false)
+		if ($dwRecvLength === FALSE)
 		{
 			MyLog::crt("socket_recv() failed; errorno :  " . socket_last_error($this->GetSocket()) . " reason : " . socket_strerror(socket_last_error($this->GetSocket())));
-			socket_close($this->GetSocket());
 			
 			FxNet::Instance()->DelSocket($this->GetSocket());
-			return false;
+			return FALSE;
 		}
 		
 		if ($dwRecvLength == 0)
 		{
 			MyLog::dbg("socket disconnect fd : " . $this->GetSocket());
-			socket_close($this->GetSocket());
-			
-			FxNet::Instance()->DelSocket($this->GetSocket());
-			return false;
+
+			$this->CloseSocket();
+			return FALSE;
 		}
 		
 		$this->GetRecvBuffer()->writeBytes($strRecvBuffer);
@@ -105,7 +113,7 @@ class FxConnectSocket extends FxMySocket
 	
 	public function OnReadEnd()
 	{
-		MyLog::crt("error read end and clear");
+		MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . "error read end and clear");
 		$this->GetRecvBuffer()->clear();
 	}
 	
@@ -113,30 +121,42 @@ class FxConnectSocket extends FxMySocket
 	{
 		if($dwLength <= 0)
 		{
-			return;
+			return FALSE;
 		}
 		while(true)
 		{
+			if ($this->GetSocket() == null)
+			{
+				MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . " socket == null");
+				$this->CloseSocket();
+				return FALSE;
+			}
 			if(($dwSendResult = socket_write($this->GetSocket(), $strSend, $dwLength)) === FALSE)
 			{
-				MyLog::crt("socket_recv() failed; errorno :  " . socket_last_error($this->GetSocket()) . " reason : " . socket_strerror(socket_last_error($this->GetSocket())));
-				socket_close($this->GetSocket());
-				
-				FxNet::Instance().DelSocket($this->GetSocket());
-				return;
+				MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . " socket_recv() failed; errorno :  " . socket_last_error($this->GetSocket()) . " reason : " . socket_strerror(socket_last_error($this->GetSocket())));
+
+				$this->CloseSocket();
+				return FALSE;
 			}
 			$dwLength -= $dwSendResult;
-			if ($dwLength <= 0)
+			if ($dwLength < 0)
 			{
-				return;
+				MyLog::crt(__FILE__ . ", " . __FUNCTION__ . ", " . __LINE__ . " send length < 0");
+				return FALSE;
+			}
+			if ($dwLength == 0)
+			{
+				return TRUE;
 			}
 		}
+		return TRUE;
 	}
 	
 	public  function SendMsg()
 	{
-		$this->Send($this->GetSendBuffer()->readAllBytes(), strlen($this->GetSendBuffer()->readAllBytes()));
+		$ret = $this->Send($this->GetSendBuffer()->readAllBytes(), strlen($this->GetSendBuffer()->readAllBytes()));
 		$this->GetSendBuffer()->clear();
+		return $ret;
 	}
 	
 	public function GetRecvBuffer()
@@ -175,6 +195,12 @@ class FxServerConnectSocket extends FxConnectSocket
 		while($this->m_oServerHeader->BuildRecvPkgHeader($this->GetRecvBuffer()->readAllBytes()) !== FALSE)
 		{
 			$dwParsePacketLen = $this->m_oServerHeader->ParsePacket();
+			if($dwParsePacketLen == FALSE)
+			{
+				MyLog::crt(__FILE__ . " ," . __FUNCTION__ . " ," . " parse packet error");
+				$this->CloseSocket();
+				return;
+			}
 			if($this->GetRecvBuffer()->GetBytesLength() < ($dwParsePacketLen + $this->m_oServerHeader->GetHeaderLength()))
 			{
 				return;
@@ -188,7 +214,10 @@ class FxServerConnectSocket extends FxConnectSocket
 			$oHeader->BuildSendPkgHeader(strlen($strData));
 			$this->GetSendBuffer()->writeBytes($oHeader->GetPkgHeader());
 			$this->GetSendBuffer()->writeBytes($strData);
-			$this->SendMsg();
+			if($this->SendMsg() == FALSE)
+			{
+				break;
+			}
 		}
 	}	
 	
